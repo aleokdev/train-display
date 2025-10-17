@@ -1,0 +1,4 @@
+__pycache__
+*.aseprite
+*.png
+!assets/*.png
