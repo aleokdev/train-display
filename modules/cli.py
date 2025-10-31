@@ -2,7 +2,8 @@ import sys
 import argparse
 from modules.image_gen import ImageGenerator
 from modules.gui import run_gui
-
+from modules.ipixel import IPixelScreen
+import asyncio
 
 def run_cli():
     parser = argparse.ArgumentParser(
@@ -13,30 +14,28 @@ def run_cli():
     parser.add_argument(
         "platform",
         type=int,
+        nargs='?',
         help="Platform number (1-12) for station platform character",
     )
-    parser.add_argument("-d", "--delay", help="Delay of the train", default=0)
-    parser.add_argument("-W", "--width", help="Width of the image", default=128)
-    parser.add_argument("-H", "--height", help="Height of the image", default=16)
+    parser.add_argument("-d", "--delay", help="Delay of the train", type=int, default=0)
+    parser.add_argument("-W", "--width", help="Width of the image", type=int,default=128)
+    parser.add_argument("-H", "--height", help="Height of the image", type=int, default=16)
     parser.add_argument(
         "-o",
         "--output",
         default="display_output.png",
         help="Output PNG file path (default: display_output.png)",
     )
+    parser.add_argument('-m', '--mac', help="MAC address of display to use")
 
     args = parser.parse_args()
 
-    img_gen = ImageGenerator(args.width, args.height, "#ffffff")
+    img_gen = ImageGenerator(args.width, args.height, "#000000", "#ffffff")
 
-    try:
-        image = img_gen.gen_image(args.digits, args.text, args.platform, args.delay)
-    except Exception as e:
-        print(f"Error when generating image: {e}")
-        sys.exit(1)
+    image = img_gen.gen_image(args.digits, args.text, args.delay, args.platform)
 
-    try:
+    if args.mac:
+        screen = IPixelScreen(args.mac)
+        asyncio.run(screen.update_screen(image))
+    else:
         image.save(args.output)
-    except Exception as e:
-        print(f"Error when saving image: {e}")
-        sys.exit(1)

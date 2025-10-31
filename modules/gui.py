@@ -12,7 +12,7 @@ class TrainDisplayGUI:
         self.root = root
         self.root.title("Train Departure Display")
         self.root.resizable(False, False)
-        self.image_gen = ImageGenerator(128, 16, '#ffffffff')
+        self.image_gen = ImageGenerator(128, 16, '#000000')
         
         # Create main frame
         main_frame = ttk.Frame(root, padding="10")
@@ -59,7 +59,7 @@ class TrainDisplayGUI:
             delay = self.delay_var.get()
             
             # Create the display image
-            display_img = self.image_gen.gen_image(digits, text, platform, delay)
+            display_img = self.image_gen.gen_image(digits, text, delay, platform)
             
             if display_img is not None:
                 # Scale the image by 4x using nearest neighbor to maintain pixel art look
