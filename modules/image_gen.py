@@ -106,11 +106,11 @@ class ImageGenerator:
         self.height = height
         self.background = background
         try:
-            self._tall_digits_img = colorize_image(Image.open("assets/tall-digits.png").convert("RGBA"), foreground)
-            self._min_img = colorize_image(Image.open("assets/min.png").convert("RGBA"), foreground)
+            self._tall_digits_img = colorize_image(Image.open("assets/tall-digits.png").convert("RGBA"), "#1f4cdf")
+            self._min_img = colorize_image(Image.open("assets/min.png").convert("RGBA"), "#606060")
             self._unifont_img = colorize_image(Image.open("assets/unifont-16.0.04.png").convert("RGBA"), foreground)
-            self._small_digits_img = colorize_image(Image.open("assets/small-digits.png").convert("RGBA"), foreground)
-            self._plus_img = colorize_image(Image.open("assets/plus.png").convert("RGBA"), foreground)
+            self._small_digits_img = colorize_image(Image.open("assets/small-digits.png").convert("RGBA"), "#ff0000")
+            self._plus_img = colorize_image(Image.open("assets/plus.png").convert("RGBA"), "#ff0000")
 
         except FileNotFoundError as e:
             raise Exception(f"Error: Could not load required image file: {e}")
@@ -144,7 +144,10 @@ class ImageGenerator:
             current_x = minutes_width
         
         # Reserve space for platform character at the end (16 pixels)
-        max_text_width = self.width - 16
+        if platform_number is not None:
+            max_text_width = self.width - 16
+        else:
+            max_text_width = self.width
         
         # 3. Render text using unifont
         for char in text:

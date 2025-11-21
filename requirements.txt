@@ -1,2 +1,4 @@
 pillow
 bleak
+requests
+pytz
