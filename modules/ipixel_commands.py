@@ -59,15 +59,10 @@ def led_on():
     """Turn the LED on."""
     return bytes.fromhex("0500070101")
 
-def send_animation(image: Image.Image):
+def send_animation(buf: io.BytesIO):
     """Send a GIF animation to the device."""
-    if isinstance(image, Image.Image):
-        buf = io.BytesIO()
-        # Preserve animation if present
-        save_kwargs = {"format": "GIF"}
-        image.save(buf, **save_kwargs)
-        buf.seek(0)
-        hex_data = buf.read().hex()
+    buf.seek(0)
+    hex_data = buf.read().hex()
 
     checksum = CRC32_checksum(hex_data)
     size = get_frame_size(hex_data, 8)
