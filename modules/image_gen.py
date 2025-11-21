@@ -100,83 +100,93 @@ def colorize_image(img, color):
     
     return colored
 
+def get_text_width(text: str) -> int:
+    total_width = 0
+    for char in text:
+        codepoint = ord(char)
+        # Determine character width (8 or 16 pixels based on character type)
+        char_width = 16 if (char in ('=', '@', '#') or codepoint >= 128 and not (0x0400 <= codepoint <= 0x04FF)) else 8
+        total_width += char_width
+    return total_width
+
+
 class ImageGenerator:
     def __init__(self, width: int, height: int, background: float | tuple[float, ...] | str | None, foreground: float | tuple[float, ...] | str = "#ffffff"):
         self.width = width
         self.height = height
         self.background = background
         try:
-            self._tall_digits_img = colorize_image(Image.open("assets/tall-digits.png").convert("RGBA"), "#1f4cdf")
+            self._tall_digits_img = colorize_image(Image.open("assets/tall-digits.png").convert("RGBA"), "#17c711")
+            self._colon_img = colorize_image(Image.open("assets/colon.png").convert("RGBA"), "#3bf834")
             self._min_img = colorize_image(Image.open("assets/min.png").convert("RGBA"), "#606060")
             self._unifont_img = colorize_image(Image.open("assets/unifont-16.0.04.png").convert("RGBA"), foreground)
             self._small_digits_img = colorize_image(Image.open("assets/small-digits.png").convert("RGBA"), "#ff0000")
             self._plus_img = colorize_image(Image.open("assets/plus.png").convert("RGBA"), "#ff0000")
+            self._overlay_img = Image.open("assets/overlay.png").convert("RGBA")
 
         except FileNotFoundError as e:
             raise Exception(f"Error: Could not load required image file: {e}")
         
 
 
-    def gen_image(self, minutes: int, text: str, delay, platform_number: int | None = None, text_offset: tuple[int, int] = (0, 0)) -> Image.Image:
+    def gen_image(self, time: str, text: str, delay, platform_number: int | None = None, text_x_offset: int = 0) -> Image.Image:
         # Validate platform number
         if platform_number is int and not (1 <= platform_number <= 12):
             raise Exception(f"Error: Platform number must be between 1 and 12, got {platform_number}")
 
         output_img = Image.new('RGBA', (self.width, self.height), color = self.background)
-        digits = split_digits(minutes)
-        minutes_width = 11
-        digits_width = len(digits) * 4 - 1
-        current_x = int((minutes_width - digits_width) / 2)
+        current_x = 0
 
         # 1. Paste digits from tall-digits.png (4x16 each)
-        for digit_char in digits:
-            digit_img = get_digit_from_tall_digits(self._tall_digits_img, digit_char)
-            if current_x + 4 <= self.width:  # Make sure we don't exceed width
-                output_img.alpha_composite(digit_img, (current_x, 0))
-                current_x += 4
+        for time_char in time:
+            if time_char == ':':
+                if current_x + 1 <= self.width:  # Make sure we don't exceed width
+                    output_img.alpha_composite(self._colon_img, (current_x, 5))
+                    current_x += 2
+            else:
+                digit_img = get_digit_from_tall_digits(self._tall_digits_img, time_char)
+                if current_x + 4 <= self.width:  # Make sure we don't exceed width
+                    output_img.alpha_composite(digit_img, (current_x, 5))
+                    current_x += 4
         
-        # 2. Paste min.png as is
-        output_img.alpha_composite(self._min_img, (0, 0))
-
         delay_x = current_x
 
-        if current_x < minutes_width:
-            current_x = minutes_width
-        
-        # Reserve space for platform character at the end (16 pixels)
-        if platform_number is not None:
-            max_text_width = self.width - 16
-        else:
-            max_text_width = self.width
-        
+        target_rect = (current_x, 0, self.width, self.height)
+
         # 3. Render text using unifont
+        text_x = current_x + text_x_offset
         for char in text:
-            if current_x >= max_text_width:  # Save space for platform character
+            if text_x >= self.width:
                 break
-                
             codepoint = ord(char)
             char_img = get_character_from_unifont(self._unifont_img, codepoint)
             
             # Determine character width (8 or 16 pixels based on character type)
             char_width = 16 if (char in ('=', '@', '#') or codepoint >= 128 and not (0x0400 <= codepoint <= 0x04FF)) else 8
-            
-            if current_x + char_width <= max_text_width:
-                output_img.alpha_composite(char_img, (current_x, 0))
-                current_x += char_width
+                
+            if target_rect[0] - text_x >= char_width:
+                # before first cropped char
+                # ignore
+                pass
+            elif target_rect[0] - text_x < 0:
+                # after first cropped char
+                # we are fully inside the target rect, no cropping needed
+                output_img.alpha_composite(char_img, (text_x, 0))
             else:
-                # Try to fit with reduced width
-                remaining_width = max_text_width - current_x
-                if remaining_width > 0:
-                    # Crop character to fit remaining space
-                    cropped_char = char_img.crop((0, 0, remaining_width, 16))
-                    output_img.alpha_composite(cropped_char, (current_x, 0))
-                break
+                # first char in target rect, which is cropped
+                cropped = char_img.crop((target_rect[0] - text_x, 0, char_width, 16))
+                output_img.alpha_composite(cropped, (target_rect[0], 0))
+            
+            text_x += char_width
         
         # 4. Add platform character at the end (0x278A + platform_number)
         if platform_number is not None:
-            platform_char = get_platform_character(self._unifont_img, platform_number)
-            platform_x = self.width - 16  # Position at the rightmost 16 pixels
-            output_img.paste(platform_char, (platform_x, 0))
+            digits = split_digits(platform_number)
+            offset = 9 - len(digits) * 2
+            for char in digits:
+                digit = get_digit_from_small_digits(self._small_digits_img, char)
+                output_img.alpha_composite(digit, (offset, -1))
+                offset += 4
 
         # 5. Overwrite delay text on top
         if int(delay) != 0:
@@ -190,6 +200,8 @@ class ImageGenerator:
                         delay_x += 4
                 else:
                     print(f"Warning: '{digit_char}' is not a digit, skipping")
+
+        output_img.alpha_composite(self._overlay_img)
 
         return output_img
 

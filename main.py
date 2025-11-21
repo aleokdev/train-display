@@ -4,8 +4,9 @@ import pytz
 import argparse
 from datetime import timedelta
 import asyncio
+import time
 
-from modules.image_gen import ImageGenerator
+from modules.image_gen import ImageGenerator, get_text_width
 from modules.ipixel import IPixelScreen
 
 # API configuration
@@ -85,6 +86,9 @@ def get_train_departures():
         print(f"Error processing data: {e}")
         return []
     
+stations = ["Antwerp-Central", "Ghent-Sint-Pieters", "Brussels Airport - Zaventem"]
+aliases = {"Antwerp-Central": "Antwerp C", "Ghent-Sint-Pieters": "Ghent St P", "Brussels Airport - Zaventem": "Brus Airport"}
+    
 def main():
     parser = argparse.ArgumentParser(
         description="Create 128x16 display with digits, min.png, text, and platform number"
@@ -99,21 +103,29 @@ def main():
     print(departures)
 
     images = []
-    for departure in departures:
-        tz = pytz.timezone('Europe/Brussels')
-        now = datetime.now(tz)
-        hh, mm = map(int, departure['time'].split(':'))
-        dep_dt = tz.localize(datetime(now.year, now.month, now.day, hh, mm))
-        # if departure time already passed today, assume it's tomorrow
-        if dep_dt < now:
-            dep_dt = dep_dt + timedelta(days=1)
-        minutes_until = int((dep_dt - now).total_seconds() // 60)
-        if minutes_until < 0:
-            minutes_until = 0
+    for departure in filter(lambda x: x['destination'] in stations, departures):
+        print(departure["destination"])
+        departure_images = []
+        destination = aliases[departure["destination"]]
 
-        images.append(img_gen.gen_image(minutes_until, departure['destination'], int(departure['delay'])))
+        upto = -get_text_width(destination) + 43
+        if upto >= 0:
+            departure_images.append(img_gen.gen_image(departure['time'], destination, int(departure['delay']), None, 0))
+        else:
+            for offset in range(2, upto, -1):
+                departure_images.append(img_gen.gen_image(departure['time'], destination, int(departure['delay']), departure['platform'], offset))
+        images.append(departure_images)
 
-    asyncio.run(IPixelScreen(args.mac).update_screen(images[0]))
+    async def display(image_matrix):
+        screen = IPixelScreen(args.mac)
+        await screen.connect()
+        for images in image_matrix:
+            await screen.update_screen(images[0])
+            time.sleep(2)
+            await screen.update_screen(images[1:])
+            time.sleep(2)
+    
+    asyncio.run(display(images))
 
 if __name__ == '__main__':
     main()
